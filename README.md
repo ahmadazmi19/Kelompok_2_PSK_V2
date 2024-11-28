@@ -1,4 +1,10 @@
-# Kelompok_2_PSK_V2
+# Praktikum Sistem Kendali_Semester 3
+## Kelompok_2_PSK_V2
+**Anggota kelompok 2:**
+1. Ignatius Samudro N (23090620023)
+2. Nandana Farrel (23090620039)
+3. Ahmad Afwa A (23090620040)
+4. Ardhana Dzaki M (23090620041)
 
 **A. Latar Belakang**<p>
 PID Controller Motor Encoder memiliki latar belakang yang dimana dalam pengaturan rpm motor seringkali memiliki error tidak sesuai dengan rpm yang diinginkan. Dalam pembuatan PID Controller ini didasari dengan kebutuhan kontrol yang presisi dan stabilitas yang tinggi. Dengan encoder sebagai sensor feedback, PID Controller dapat menangani dinamika motor yang kompleks dan memberikan solusi fleksibel yang dapat diimplementasikan pada berbagai jenis aplikasi dan sistem. <p>
