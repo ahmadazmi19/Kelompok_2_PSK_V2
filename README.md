@@ -11,5 +11,5 @@ PID Controller Motor Encoder memiliki latar belakang yang dimana dalam pengatura
 <p></p>
 
 **C.Wiring Controller**
-![Uploading image.png…]()
+
 
