@@ -6,8 +6,8 @@ from PyQt5.QtCore import QTimer
 import pyqtgraph as pg
 
 class MotorControlApp(QMainWindow):
-    def __init__(self):
-        super().__init__()
+    def _init_(self):
+        super()._init_()
         self.setWindowTitle("GUI Motor Control PID")
         self.setGeometry(100, 100, 800, 600)
 
@@ -82,7 +82,7 @@ class MotorControlApp(QMainWindow):
         self.stop_button.clicked.connect(self.stop_motor)
 
         self.reset_button = QPushButton("Reset Graph")
-        self.reset_button.setStyleSheet("background-color: #FF4D00; color: white;")
+        self.reset_button.setStyleSheet("background-color: blue; color: white;")
         self.reset_button.clicked.connect(self.reset_graph)
 
         button_layout.addWidget(self.run_button)
@@ -158,7 +158,7 @@ class MotorControlApp(QMainWindow):
         self.overshoot_label = QLabel("Overshoot: 0 %")
         self.settling_time_label = QLabel("Settling Time: 0 s")
         self.steady_state_label = QLabel("Steady State: 0 RPM")
-        self.error_label = QLabel("Error: 0 %")
+        self.error_label = QLabel("Error: 0 ")
         
         self.present_speed_label.setStyleSheet("font-size: 16px;")
         self.peak_time_label.setStyleSheet("font-size: 16px;")
@@ -232,10 +232,10 @@ class MotorControlApp(QMainWindow):
 
         # Add layouts to main layout
         main_layout.addLayout(control_layout)
-        main_layout.addLayout(button_layout)
         main_layout.addLayout(dir_layout)
         main_layout.addLayout(setpoint_layout)
         main_layout.addLayout(pid_layout)
+        main_layout.addLayout(button_layout)
         main_layout.addLayout(serial_layout)
         main_layout.addWidget(self.parameters_header)
         main_layout.addLayout(parameter_layout)
@@ -335,7 +335,7 @@ class MotorControlApp(QMainWindow):
         self.overshoot_label.setText("Overshoot: 0 %")
         self.settling_time_label.setText("Settling Time: 0 s")
         self.steady_state_label.setText("Steady State: 0 RPM")
-        self.error_label.setText("Error: 0 %")
+        self.error_label.setText("Error: 0 ")
 
         # Reset setpoint
         try:
@@ -430,12 +430,12 @@ class MotorControlApp(QMainWindow):
         self.overshoot_label.setText(f"Overshoot: {self.overshoot:.2f} %" if self.overshoot is not None else "Overshoot: -")
         self.settling_time_label.setText(f"Settling Time: {self.settling_time:.2f} s" if self.settling_time else "Settling Time: -")
         self.steady_state_label.setText(f"Steady State: {self.steady_state:.2f} RPM" if self.steady_state else "Steady State: -")
-        self.error_label.setText(f"Error: {error:.2f} %")
+        self.error_label.setText(f"Error: {error:.2f} ")
 
 
 
 # Main application
-if __name__ == "__main__":
+if _name_ == "_main_":
     app = QApplication(sys.argv)
     window = MotorControlApp()
     window.show()
