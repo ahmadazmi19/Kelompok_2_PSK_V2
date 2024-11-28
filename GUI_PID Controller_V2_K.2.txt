@@ -1,0 +1,442 @@
+import sys
+import serial
+import time
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QLineEdit, QComboBox, QFormLayout, QSizePolicy
+from PyQt5.QtCore import QTimer
+import pyqtgraph as pg
+
+class MotorControlApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("GUI Motor Control PID")
+        self.setGeometry(100, 100, 800, 600)
+
+        # Initialize serial communication
+        self.serial_port = None
+
+        # Create the GUI layout
+        self.initUI()
+
+        # Timer for updating the graph
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_graph)
+
+        # Data for graph
+        self.time_data = []
+        self.speed_data = []
+        self.error_data = []  # 
+        self.start_time = time.time()
+
+        # Initial parameters
+        self.setpoint = 0
+        self.steady_state = None
+        self.peak_time = None
+        self.overshoot = None
+        self.settling_time = None
+
+    def initUI(self):
+        # Main layout
+        main_layout = QVBoxLayout()
+        main_layout2 = QVBoxLayout()
+        main_layout3 = QHBoxLayout()
+        main_layout4 = QVBoxLayout()
+
+        # Header Layout
+        header_layout = QHBoxLayout()
+        self.header_layout = QLabel("<h1>Kendali Motor</h1>")
+        self.header_layout.setStyleSheet("""
+            QLabel {
+                background-color: black;  
+                color: white;              
+                font-size: 20px;           
+                font-weight: bold;         
+                padding: 15px;             
+                border-radius: 20px;        
+            }
+        """)
+        self.header_layout.setMaximumHeight(300)
+        header_layout.addWidget(self.header_layout)
+
+        # Control header
+        control_layout = QHBoxLayout()
+        self.control_layout = QLabel("Control Settings")
+        self.control_layout.setStyleSheet("""
+            QLabel {
+                background-color: #FFF600;  
+                color: black;              
+                font-size: 16px;           
+                font-weight: bold;            
+            }
+        """)
+        self.control_layout.setMaximumHeight(25)
+        control_layout.addWidget(self.control_layout)
+
+        # Control buttons
+        button_layout = QHBoxLayout()
+        self.run_button = QPushButton("Run motor")
+        self.run_button.setStyleSheet("background-color: green; color: white;")
+        self.run_button.clicked.connect(self.run_motor)
+
+        self.stop_button = QPushButton("Stop motor")
+        self.stop_button.setStyleSheet("background-color: red; color: white;")
+        self.stop_button.clicked.connect(self.stop_motor)
+
+        self.reset_button = QPushButton("Reset Graph")
+        self.reset_button.setStyleSheet("background-color: #FF4D00; color: white;")
+        self.reset_button.clicked.connect(self.reset_graph)
+
+        button_layout.addWidget(self.run_button)
+        button_layout.addWidget(self.stop_button)
+        button_layout.addWidget(self.reset_button)
+
+        # bwd and fwd
+        dir_layout = QHBoxLayout()
+        self.dir_label = QLabel("Direction: ")
+        self.back_button = QPushButton("Backward")
+        self.back_button.setStyleSheet("background-color: black; color: white;")
+        self.back_button.clicked.connect(self.backward_motor)
+
+        self.fwd_button = QPushButton("Forward")
+        self.fwd_button.setStyleSheet("background-color: white; color: black;")
+        self.fwd_button.clicked.connect(self.run_motor)
+
+        dir_layout.addWidget(self.dir_label)
+        dir_layout.addWidget(self.fwd_button)
+        dir_layout.addWidget(self.back_button)
+
+        # Setpoint settings
+        setpoint_layout = QHBoxLayout()
+        self.speed_label = QLabel("Set Speed (rpm):")
+        self.speed_input = QLineEdit("1000")
+        setpoint_layout.addWidget(self.speed_label)
+        setpoint_layout.addWidget(self.speed_input)
+        self.speed_label.setStyleSheet("background-color: white; color: black; font-weight: bold; ")
+        self.speed_input.setStyleSheet("background-color: white; color: black")
+
+        # PID settings
+        pid_layout = QVBoxLayout()
+        pid1 = QHBoxLayout()
+        pid2 = QHBoxLayout()
+        pid3 = QHBoxLayout()
+        self.kp_label = QLabel("kP:")
+        self.kp_input = QLineEdit("0.06")
+        self.ki_label = QLabel("kI:")
+        self.ki_input = QLineEdit("0.055")
+        self.kd_label = QLabel("kD:")
+        self.kd_input = QLineEdit("0.04")
+        pid1.addWidget(self.kp_label)
+        pid1.addWidget(self.kp_input)
+        pid2.addWidget(self.ki_label)
+        pid2.addWidget(self.ki_input)
+        pid3.addWidget(self.kd_label)
+        pid3.addWidget(self.kd_input)
+        pid_layout.addLayout(pid1)
+        pid_layout.addLayout(pid2)
+        pid_layout.addLayout(pid3)
+
+        self.kp_label.setStyleSheet("background-color: white; color: black; font-weight: bold; ")
+        self.ki_label.setStyleSheet("background-color: white; color: black; font-weight: bold; ")
+        self.kd_label.setStyleSheet("background-color: white; color: black; font-weight: bold; ")
+        
+        # Parameter header
+        self.parameters_header = QLabel("Parameters")
+        self.parameters_header.setStyleSheet("""
+            QLabel {
+                background-color: #FFF600;  
+                color: black;              
+                font-size: 16px;           
+                font-weight: bold;         
+            }
+        """)
+        self.parameters_header.setMaximumHeight(25)
+
+        # Parameter display
+        parameter_layout = QVBoxLayout()
+        self.present_speed_label = QLabel("Present Speed (rpm): 0.00")
+        self.peak_time_label = QLabel("Peak Time: 0 s")
+        self.rise_time_label = QLabel("Rise Time: 0 s")
+        self.overshoot_label = QLabel("Overshoot: 0 %")
+        self.settling_time_label = QLabel("Settling Time: 0 s")
+        self.steady_state_label = QLabel("Steady State: 0 RPM")
+        self.error_label = QLabel("Error: 0 %")
+        
+        self.present_speed_label.setStyleSheet("font-size: 16px;")
+        self.peak_time_label.setStyleSheet("font-size: 16px;")
+        self.rise_time_label.setStyleSheet("font-size: 16px;")
+        self.overshoot_label.setStyleSheet("font-size: 16px;")
+        self.settling_time_label.setStyleSheet("font-size: 16px;")
+        self.steady_state_label.setStyleSheet("font-size: 16px;")
+        self.error_label.setStyleSheet("font-size: 16px;")
+
+        parameter_layout.addWidget(self.present_speed_label)
+        parameter_layout.addWidget(self.peak_time_label)
+        parameter_layout.addWidget(self.rise_time_label)
+        parameter_layout.addWidget(self.overshoot_label)
+        parameter_layout.addWidget(self.settling_time_label)
+        parameter_layout.addWidget(self.steady_state_label)
+        parameter_layout.addWidget(self.error_label)
+
+        # Serial communication settings
+        serial_layout = QHBoxLayout()
+        self.com_label = QLabel("COM Port:")
+        self.com_select = QComboBox()
+        self.com_select.addItems(self.get_available_com_ports())
+        self.send_button = QPushButton("Send")
+        self.send_button.setStyleSheet("background-color: blue; color: white;")
+        self.send_button.clicked.connect(self.send_settings)
+        serial_layout.addWidget(self.com_label)
+        serial_layout.addWidget(self.com_select)
+        serial_layout.addWidget(self.send_button)
+
+        # Graphics Header
+        self.graph_header = QLabel("Graph")
+        self.graph_header.setStyleSheet("""
+            QLabel {
+                background-color: #FFF600;  
+                color: black;              
+                font-size: 16px;           
+                font-weight: bold;         
+                padding: 1px;             
+                border-radius: 2px;        
+            }
+        """)
+        self.graph_header.setMaximumHeight(25)
+
+        # Graph
+        self.graph_widget = pg.PlotWidget()
+        self.graph_widget.setBackground('w')
+        self.graph_widget.setTitle("Motor Speed (rpm)", color="black", size="15pt")
+        self.graph_widget.setLabel('left', 'Speed (rpm)')
+        self.graph_widget.setLabel('bottom', 'Time (s)')
+        self.plot = self.graph_widget.plot(pen=pg.mkPen(color='r', width=2))
+        # Add legend to graph
+        self.graph_widget.addLegend()
+        # Enable grid
+        self.graph_widget.showGrid(x=True, y=True, alpha=0.5)  # Set grid visibility
+
+        # Plot RPM data
+        self.plot_rpm = self.graph_widget.plot(pen=pg.mkPen(color='r', width=2), name="RPM")
+        # Plot Error data
+        self.plot_error = self.graph_widget.plot(pen=pg.mkPen(color='b', width=2), name="Error")
+        # Plot Setpoint data
+        self.plot_setpoint = self.graph_widget.plot(pen=pg.mkPen(color='g', width=2), name="Setpoint")
+
+        # Error graph (secondary plot)
+        self.error_plot = self.graph_widget.plot(pen=pg.mkPen(color='b', width=2))  # Blue line for error
+
+        # Setpoint line (Horizontal line showing set RPM)
+        self.setpoint_line = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('g'))  # Green line for setpoint RPM
+        self.graph_widget.addItem(self.setpoint_line)
+
+
+
+        # Add layouts to main layout
+        main_layout.addLayout(control_layout)
+        main_layout.addLayout(button_layout)
+        main_layout.addLayout(dir_layout)
+        main_layout.addLayout(setpoint_layout)
+        main_layout.addLayout(pid_layout)
+        main_layout.addLayout(serial_layout)
+        main_layout.addWidget(self.parameters_header)
+        main_layout.addLayout(parameter_layout)
+        main_layout2.addWidget(self.graph_header)
+        main_layout2.addWidget(self.graph_widget)
+        main_layout3.addLayout(main_layout)
+        main_layout3.addLayout(main_layout2)
+        main_layout4.addLayout(header_layout)
+        main_layout4.addLayout(main_layout3)
+
+        # Set main widget
+        container = QWidget()
+        container.setLayout(main_layout4)
+        self.setCentralWidget(container)
+
+    def get_available_com_ports(self):
+        """Detect available COM ports"""
+        import serial.tools.list_ports
+        ports = serial.tools.list_ports.comports()
+        return [port.device for port in ports]
+
+    def connect_serial(self):
+        """Connect to the selected COM port"""
+        try:
+            self.serial_port = serial.Serial(self.com_select.currentText(), 9600, timeout=1)
+        except Exception as e:
+            print(f"Error connecting to COM port: {e}")
+            self.serial_port = None
+
+    def send_settings(self):
+        """Send PID settings to Arduino"""
+        if not self.serial_port:
+            self.connect_serial()
+        if self.serial_port:
+            try:
+                set_speed = self.speed_input.text()
+                kp = self.kp_input.text()
+                ki = self.ki_input.text()
+                kd = self.kd_input.text()
+
+                self.serial_port.write(f"vs_set_speed{set_speed}\n".encode())
+                time.sleep(0.1)
+                self.serial_port.write(f"vs_kp{kp}\n".encode())
+                time.sleep(0.1)
+                self.serial_port.write(f"vs_ki{ki}\n".encode())
+                time.sleep(0.1)
+                self.serial_port.write(f"vs_kd{kd}\n".encode())
+                time.sleep(0.1)
+
+                print("Settings sent to Arduino.")
+            except Exception as e:
+                print(f"Error sending settings: {e}")
+
+    def run_motor(self):
+        """Send command to run the motor"""
+        if not self.serial_port:
+            self.connect_serial()
+        if self.serial_port:
+            self.serial_port.write("vs_start\n".encode())
+            self.timer.start(0)  # Update the graph every 100 ms
+
+    def backward_motor(self):
+        """Send command to run the motor"""
+        if not self.serial_port:
+            self.connect_serial()
+        if self.serial_port:
+            self.serial_port.write("vs_backward\n".encode())
+            self.timer.start(0)
+
+    def stop_motor(self):
+        """Send command to stop the motor"""
+        if self.serial_port:
+            self.serial_port.write("vs_stop\n".encode())
+            self.timer.stop()
+
+    def reset_graph(self):
+        """Reset the graph data and parameters."""
+        # Reset graph data
+        self.time_data = []
+        self.speed_data = []
+        self.error_data = []  # Reset the error data as well
+        self.plot.clear()  # Clear the speed plot
+        self.error_plot.clear()  # Clear the error plot
+
+        # Reset time for the graph
+        self.start_time = time.time()  
+
+        # Reset parameters
+        self.steady_state = None
+        self.peak_time = None
+        self.overshoot = None
+        self.settling_time = None
+
+        # Update parameter labels to default values
+        self.peak_time_label.setText("Peak Time: 0 s")
+        self.rise_time_label.setText("Rise Time: 0 s")
+        self.overshoot_label.setText("Overshoot: 0 %")
+        self.settling_time_label.setText("Settling Time: 0 s")
+        self.steady_state_label.setText("Steady State: 0 RPM")
+        self.error_label.setText("Error: 0 %")
+
+        # Reset setpoint
+        try:
+            self.setpoint = float(self.speed_input.text())  # Update to the current setpoint input
+        except ValueError:
+            self.setpoint = 0  # Default to 0 if input is invalid
+        self.setpoint_line.setPos(self.setpoint)  # Update the setpoint line position
+        self.present_speed_label.setText("Present Speed (rpm): 0.00")
+
+
+    def update_graph(self):
+        """Update graph with real-time data from Arduino"""
+        if self.serial_port and self.serial_port.in_waiting:
+            try:
+                line = self.serial_port.readline().decode().strip()
+                if line.startswith("speed"):
+                    speed = float(line[5:])
+                    current_time = time.time() - self.start_time
+                    error = self.setpoint - speed
+
+                    self.time_data.append(current_time)
+                    self.speed_data.append(speed)
+                    self.error_data.append(error)
+
+                    # Update the plots
+                    self.plot.setData(self.time_data, self.speed_data)
+                    self.error_plot.setData(self.time_data, self.error_data)
+
+                    # Update setpoint line position
+                    self.setpoint_line.setPos(self.setpoint)
+
+                    # Update speed and error labels
+                    self.present_speed_label.setText(f"Present Speed (rpm): {speed:.2f}")
+                    self.update_parameters(speed, error)
+
+            except Exception as e:
+                print(f"Error reading serial data: {e}")
+    
+    def calculate_parameters(self):
+        """Calculate system performance parameters based on speed data."""
+        if len(self.time_data) < 2:
+            return  # Tidak cukup data untuk analisis
+        
+        setpoint = float(self.speed_input.text())
+        steady_state_tolerance = 0.05 * setpoint  # ±5% dari setpoint
+        rise_time_start = None
+        rise_time_end = None
+        peak_time = None
+        peak_value = max(self.speed_data)
+        overshoot = None
+        settling_time = None
+
+        for i, speed in enumerate(self.speed_data):
+            time = self.time_data[i]
+            # Rise Time
+            if rise_time_start is None and speed >= 0.1 * setpoint:
+                rise_time_start = time
+            if rise_time_end is None and speed >= 0.9 * setpoint:
+                rise_time_end = time
+
+            # Peak Time
+            if speed == peak_value:
+                peak_time = time
+
+            # Settling Time
+            if abs(speed - setpoint) <= steady_state_tolerance:
+                if settling_time is None:
+                    settling_time = time  
+                elif i == len(self.speed_data) - 1:
+                    
+                    settling_time = time
+
+        # Overshoot
+        if peak_value > setpoint:
+            overshoot = ((peak_value - setpoint) / setpoint) * 100
+        else:
+            overshoot = 0
+
+        # Assign
+        self.rise_time = (rise_time_end - rise_time_start) if rise_time_start and rise_time_end else None
+        self.peak_time = peak_time
+        self.overshoot = overshoot
+        self.settling_time = settling_time
+        self.steady_state = setpoint  
+
+
+    def update_parameters(self, speed, error):
+        """Update performance parameters based on current data."""
+        self.calculate_parameters()
+        self.peak_time_label.setText(f"Peak Time: {self.peak_time:.2f} s" if self.peak_time else "Peak Time: -")
+        self.rise_time_label.setText(f"Rise Time: {self.rise_time:.2f} s" if self.rise_time else "Rise Time: -")
+        self.overshoot_label.setText(f"Overshoot: {self.overshoot:.2f} %" if self.overshoot is not None else "Overshoot: -")
+        self.settling_time_label.setText(f"Settling Time: {self.settling_time:.2f} s" if self.settling_time else "Settling Time: -")
+        self.steady_state_label.setText(f"Steady State: {self.steady_state:.2f} RPM" if self.steady_state else "Steady State: -")
+        self.error_label.setText(f"Error: {error:.2f} %")
+
+
+
+# Main application
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MotorControlApp()
+    window.show()
+    sys.exit(app.exec_())
